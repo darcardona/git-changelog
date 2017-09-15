@@ -1,0 +1,2 @@
+FROM clojure:alpine
+

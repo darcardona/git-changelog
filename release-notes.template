@@ -1,0 +1,33 @@
+{{#implements?}}
+# Implemented Stories
+{{#implements}}
+
+## {{issue}}
+{{#commits}}
+* [{{short-hash}}] {{subject}} [{{author}}]
+  {{#see-also?}}
+  See also:
+  {{#see-also}}
+  - {{.}}
+  {{/see-also}}
+  {{/see-also?}}
+{{/commits}}
+{{/implements}}
+{{/implements?}}
+{{#resolves?}}
+# Resolved Issues
+
+{{#resolves}}
+## {{issue}}
+{{#commits}}
+* [{{short-hash}}] {{subject}} [{{author}}]
+{{/commits}}
+{{/resolves}}
+{{/resolves?}}
+{{#untracked?}}
+# Untracked Changes
+
+{{#untracked}}
+* [{{short-hash}}] {{subject}} [{{author}}]
+{{/untracked}}
+{{/untracked?}}
