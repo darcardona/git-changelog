@@ -1,18 +1,18 @@
 (ns git-changelog.cli
   (:require [clojure.java.io :as io]
             [clojure.tools.cli :refer [parse-opts]]
-            [git-changelog.context :refer [run-m def-m with-context let-m do-m]]
+            [git-changelog.context :refer [mrun defm letm with-context]]
             [git-changelog.template :as template]
             [git-changelog.system :as system]
             [git-changelog.core :as core])
   (:gen-class))
 
-(def-m get-cli-options
+(defm get-cli-options
   []
-  (with-context
-    [as-file             :as-file
-     is-file?            :is-file?
-     is-repository-path? :is-repository-path?]
+  (letm
+    [{as-file             :as-file
+      is-file?            :is-file?
+      is-repository-path? :is-repository-path?}]
     [["-t" "--template" "template file"
       :required "TEMPLATE"
       :parse-fn #(as-file %)
@@ -23,83 +23,86 @@
       :default "."]
      ["-h" "--help"]]))
 
-(def-m parse-args
+(defm parse-args
   [args]
-  (let-m
-    [cli-options (get-cli-options)]
-    (let
-      [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
-      (with-context
-        [is-repository-path? :is-repository-path?
-         is-valid-reference? :is-valid-reference?]
-        (cond
-          ;; help => exit OK with usage summary
-          (:help options)
-          {:action :help
-           :summary summary}
+  (let
+      [cli-options (mrun (get-cli-options))
+       {:keys [options arguments errors summary]} (parse-opts args cli-options)]
+    (letm
+      [{:keys [is-repository-path? is-valid-reference?]}]
+      (cond
+        ;; help => exit OK with usage summary
+        (:help options)
+        {:action :help
+         :summary summary}
 
-          ;; errors => exit with description of error
-          errors
-          {:action :exit-with-errors
-           :errors errors}
+        ;; errors => exit with description of error
+        errors
+        {:action :exit-with-errors
+         :errors errors}
 
-          ;; template is required
-          (nil? (:template options))
-          {:action :exit-with-errors
-           :errors ["Missing required argument: -t"]}
+        ;; template is required
+        (nil? (:template options))
+        {:action :exit-with-errors
+         :errors ["Missing required argument: -t"]}
 
-          ;; path should be a valid git repository
-          (not (is-repository-path? (:repository options)))
-          {:action :exit-with-errors
-           :errors [(str (:repository options) " is not a valid git repository")]}
+        ;; path should be a valid git repository
+        (not (is-repository-path? (:repository options)))
+        {:action :exit-with-errors
+         :errors [(str (:repository options) " is not a valid git repository")]}
 
-          (not= 2 (count arguments))
-          {:action :exit-with-errors
-           :errors ["Invalid number of arguments"]}
+        (not= 2 (count arguments))
+        {:action :exit-with-errors
+         :errors ["Invalid number of arguments"]}
 
-          (nil? (is-valid-reference? (:repository options) (first arguments)))
-          {:action :exit-with-errors
-           :errors [(str (first arguments) " is not a valid commit reference")]}
+        (nil? (is-valid-reference? (:repository options) (first arguments)))
+        {:action :exit-with-errors
+         :errors [(str (first arguments) " is not a valid commit reference")]}
 
-          (nil? (is-valid-reference? (:repository options) (second arguments)))
-          {:action :exit-with-errors
-           :errors [(str (second arguments) " is not a valid commit reference")]}
+        (nil? (is-valid-reference? (:repository options) (second arguments)))
+        {:action :exit-with-errors
+         :errors [(str (second arguments) " is not a valid commit reference")]}
 
-          :else
-          {:action :generate-release-notes
-           :repository (:repository options)
-           :template (:template options)
-           :from (first arguments)
-           :to (second arguments)})))))
+        :else
+        {:action :generate-release-notes
+         :repository (:repository options)
+         :template (:template options)
+         :from (first arguments)
+         :to (second arguments)}))))
 
-(def-m help
+(defm help
   [args]
-  (with-context [help! :help!]
+  (with-context [help!]
     (help! (:summary args))))
 
-(def-m exit-with-errors
+(defm exit-with-errors
   [args]
-  (with-context [exit-with-errors! :exit-with-errors!]
+  (with-context [exit-with-errors!]
     (exit-with-errors! (:errors args))))
 
-(def-m generate-release-notes
+(defm generate-release-notes
   [args]
   (with-context
-    [out!                    :out!
-     generate-release-notes! :generate-release-notes!]
+    [out!
+     read-file!
+     generate-release-notes!]
     (let [{:keys [template repository from to]} args]
-      (out! (template/render (slurp template)
+      (out! (template/render (read-file! template)
                              (generate-release-notes! repository from to))))))
 
-(def-m app
+(defm app
   [args]
-  (let [parsed-args (do-m (parse-args args))
-        action      (-> parsed-args :action name symbol resolve)]
-    (do-m (action parsed-args))))
+  (let [parsed-args     (mrun (parse-args args))
+        action-mappings {:help help
+                         :exit-with-errors exit-with-errors
+                         :generate-release-notes generate-release-notes}
+        action          (-> parsed-args :action action-mappings)]
+    (mrun (action parsed-args))))
 
 (defn -main
   [& args]
   (let [context {:out!                    println
+                 :read-file!              slurp
                  :as-file                 io/as-file
                  :is-file?                #(.isFile %)
                  :help!                   system/help!
@@ -107,4 +110,4 @@
                  :is-repository-path?     core/is-repository-path?
                  :is-valid-reference?     core/is-valid-reference?
                  :generate-release-notes! core/generate-release-notes!}]
-    (run-m context (app args))))
+    (mrun context (app args))))
